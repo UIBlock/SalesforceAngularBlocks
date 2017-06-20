@@ -1,5 +1,5 @@
  (function() { 
-        var app=angular.module('StandardAngular',['StandardAngularInitilizer','ngAnimate','angularUtils.directives.dirPagination','ngSanitize','ui.bootstrap'])//,'cometd-reload'
+        var app=angular.module('AngularBlocks',['AngularBlocksInitilizer','ngAnimate','angularUtils.directives.dirPagination','ngSanitize','ui.bootstrap'])//,'cometd-reload'
         app.factory('jsonListOfObjectDefination',function($salesforceApiForVf,$rootScope){
             
             var jsonListOfObjectDefination=window.jsonListOfObjectDefination
@@ -234,7 +234,7 @@
                         }
                     }
         })
-        app.controller('StandardAngularController', function($scope,jsonListOfObjectDefination,Sboject,AllMessages,$salesforceStreaming){
+        app.controller('AngularBlocksController', function($scope,jsonListOfObjectDefination,Sboject,AllMessages,$salesforceStreaming){
             $scope.AllMessages=AllMessages
             $salesforceStreaming.initialize()
             
