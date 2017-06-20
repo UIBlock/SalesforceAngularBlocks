@@ -1,18 +1,69 @@
-(function() {  
-        var app=angular.module('SalesforceAngularBlocks',['ngAnimate','angularUtils.directives.dirPagination','ngSanitize','ui.bootstrap'])//,'cometd-reload'
-        app.constant('SESSION_ID', '{!$Api.Session_ID}')
-        app.constant('USER_PROFILE_ID', '{!$Profile.Id}')
-        app.constant('USER_PROFILE_NAME', '{!$Profile.Name}')
-        app.constant('PRM_PREFIX', '{!$Site.Prefix}')
-        app.constant('Object_ID', '{!$CurrentPage.parameters.id}')
+ (function() { 
+        var app=angular.module('StandardAngular',['StandardAngularInitilizer','ngAnimate','angularUtils.directives.dirPagination','ngSanitize','ui.bootstrap'])//,'cometd-reload'
         app.factory('jsonListOfObjectDefination',function($salesforceApiForVf,$rootScope){
             
-            var jsonListOfObjectDefination={!jsonListOfObjectDefination}
+            var jsonListOfObjectDefination=window.jsonListOfObjectDefination
             
             return jsonListOfObjectDefination
         })
-        
-        app.factory('Sboject',function($q,$salesforceApiForVf,$rootScope,jsonListOfObjectDefination,AllMessages,checkJobStatus){
+        app.factory('SbojectConstruction',function(){
+            var SobjectWrapperNew =function(SobjectWrapperParameters){
+                this.UniqueiId=SobjectWrapperParameters['UniqueiId'];
+                if(SobjectWrapperParameters['objectName'])
+                    this.Key=SobjectWrapperParameters['objectName'];
+                else
+                    this.Key=SobjectWrapperParameters['Key'];
+                this.Label=SobjectWrapperParameters['Label'];
+                this.Name=SobjectWrapperParameters['Name'];
+                this.Filters=SobjectWrapperParameters['Filters']||[];
+                this.Fields=SobjectWrapperParameters['Fields']||[];
+                this.displayFields=SobjectWrapperParameters['displayFields']||[];
+                this.displayColums=SobjectWrapperParameters['displayColums']||[];
+                
+                this.RelatedListMap=SobjectWrapperParameters['RelatedListMap']||[];
+                this.lookupViewDefination=SobjectWrapperParameters['lookupViewDefination']||{};
+                this.NewViewDefination=SobjectWrapperParameters['NewViewDefination']||angular.copy(this);
+                
+                
+                var wherepart='';
+                if(this.Filters&&this.Filters.length>0){
+                    if(this.filterExpresion==null)
+                        wherepart=' where '+joinFilters(this.Filters,'1');
+                    else{
+                       wherepart=' where '+joinFilters(this.Filters,this.filterExpresion); 
+                    }
+                }
+                this.query='Select '+this.Fields.join(',')+' From '+this.Key+wherepart;
+                this.recentQuery='SELECT '+this.Fields.join(',')+' RecentlyViewed WHERE Type IN (\''+this.Key+'\') ORDER BY LastViewedDate DESC ';
+                if(this.Fields&&this.Fields.indexOf('Id')>-1)
+                    this.searchQuery='Find {} In Name FIELDS RETURNING '+this.Key+' ('+this.Fields.join(',')+' limit 100)';
+                    //this.evalSearchQuery='this.searchQuery=this.searchQuery.replace( /({)(.*?)(})/, "{*some string*}" );'
+                else if(this.Fields!=null&&this.Fields.indexOf('Id')==-1){
+                    this.searchQuery='Find {} In Name FIELDS RETURNING '+this.Key+' (Id,'+this.Fields.join(',')+'  limit 100)';    
+                }
+                                        
+    
+            }
+            var joinFilters=function(Filters,filterExpresion){
+                var filterExpresionsplitted= filterExpresion.split('');
+                
+                for(var i=0;i<filterExpresionsplitted.length;i++){
+                    try{
+                    	if(Filters[parseInt(filterExpresionsplitted[i])-1])                  
+                        	filterExpresionsplitted[i]=Filters[parseInt(filterExpresionsplitted[i])-1];
+                    }catch(e){
+                        
+                    }
+                }
+                return  filterExpresionsplitted.join('') ;               
+            }
+            return {
+                getSbojectWrapperNew:function(SobjectWrapperParameters){
+                    return new SobjectWrapperNew(SobjectWrapperParameters)
+                }
+            }
+        })
+        app.factory('Sboject',function($q,$salesforceApiForVf,$rootScope,Object_ID,jsonListOfObjectDefination,AllMessages,checkJobStatus){
             var fetchQueryInit=function(deferred){
                 
                 var thisrefrence=this
@@ -38,6 +89,7 @@
                         
                         }
                  )
+                 if(deferred)
                  return deferred.promise;
             }
             var fetchQuery=function(){
@@ -45,7 +97,8 @@
                 thisrefrence.data=[]
             	$salesforceApiForVf.query($salesforceApiForVf.org,this.query).then(
                         function(response){
-                            thisrefrence.data=response.data.records            
+                            thisrefrence.data=response.data.records
+                            thisrefrence.totallength=response.data.records.length
                         },null,
                         function(response){
                             thisrefrence.data=response.data.records
@@ -55,17 +108,27 @@
             
             var Sboject={}
             Sboject.init=function(jsonObject){
+                var defrredlayout;
                 fromJson(this,jsonObject)
-            	this.RelatedListMap.forEach(function(v){
-                    v.fetchQuery=fetchQuery;
-                    v.reload=fetchQuery
-                    v.fetchQuery()
-                })
+                
+                if(this.RelatedListMap){
+                    this.RelatedListMap.forEach(function(v){
+                        v.fetchQuery=fetchQuery;
+                        v.reload=fetchQuery
+                        v.fetchQuery()
+                    })
+                
+                }else
+                   defrredlayout=$q.defer()
                 this.reload=fetchQuery
             	this.fetchQueryInit=fetchQueryInit
-            	this.fetchQueryInit($q.defer()).then(function(layout){
+            	this.fetchQueryInit(defrredlayout)
+                
+                if(defrredlayout)
+                defrredlayout.promise.then(function(layout){
                 	console.log('layout fetched')
                 })
+                
             }
             var fromJson = function(thisobject, jsonobject) {  
               for (var prop in jsonobject) {
@@ -77,23 +140,48 @@
             return Sboject
                                         
         })
+        
         app.factory('AllMessages',function(){
+            Object.size = function(obj) {
+                var size = 0, key;
+                for (key in obj) {
+                    if (obj.hasOwnProperty(key)) size++;
+                }
+                return size;
+            };
+            
             return {
             	pagelevel:{},
             	blocklevel:{},
                 fieldlevel:{},
 				delete:function(level,blockIdentifier,messageIdentifier){
-					if(this[level][blockIdentifier]&&this[level][blockIdentifier][messageIdentifier])
-						delete this[level][blockIdentifier][messageIdentifier]
-					if(this[level][blockIdentifier]&&level=='pagelevel')
+                	if(level=='fieldlevel'&&this[level][blockIdentifier][messageIdentifier]){
+                		delete this[level][blockIdentifier][messageIdentifier]
+            		}
+                    if(level=='blocklevel'&&this[level][blockIdentifier][messageIdentifier]){
+                        delete this[level][blockIdentifier][messageIdentifier]
+                    }else if(level=='blocklevel')
+						delete this[level][blockIdentifier]
+                
+					if(level=='pagelevel')
 						delete this[level][blockIdentifier]
 				},
 				add:function(message,level,blockIdentifier,messageIdentifier){
-					if(!this[level][blockIdentifier]&&messageIdentifier){
-						this[level][blockIdentifier]={}
+					if(level=='fieldlevel'){
+                        if(!this[level][blockIdentifier])
+							this[level][blockIdentifier]={}
 						this[level][blockIdentifier][messageIdentifier]=message
 							
 					}
+                    if(level=='blocklevel'){
+                        if(!this[level][blockIdentifier]){
+                            this[level][blockIdentifier]={}
+                        }    
+                        if(!messageIdentifier){
+                           messageIdentifier=new Date().getTime();     
+                        }
+                        this[level][blockIdentifier][messageIdentifier]=message
+                    }
 					if(this[level]&&level=='pagelevel'){
 						this[level][blockIdentifier]=message
 					}	
@@ -136,8 +224,8 @@
         })
         app.factory('extractRowMetadata',function(jsonListOfObjectDefination){
             return function(key,fieldpath){
-                        if(fieldpath.indexOf('__r')>-1){
-                            fieldpath=fieldpath.substring(0,fieldpath.indexOf('__r'))+'__c'
+                        if(fieldpath.indexOf('.')>-1){
+                            fieldpath=fieldpath.substring(0,fieldpath.indexOf('.'))
                         }
                 		try{
                         	return jsonListOfObjectDefination[key].fieldDescribeMap[fieldpath]
@@ -146,15 +234,14 @@
                         }
                     }
         })
-        app.controller('SalesforceAngularBlocksController', function($scope, $rootScope, $document,$filter,$http,$salesforceApiForVf,$uibModal,SESSION_ID,Object_ID,PRM_PREFIX,extractRowMetadata,remoteSave,remoteInsert,remoteDelete,jsonListOfObjectDefination,Sboject,AllMessages,$salesforceStreaming,customexceptionMessages){
+        app.controller('StandardAngularController', function($scope,jsonListOfObjectDefination,Sboject,AllMessages,$salesforceStreaming){
             $scope.AllMessages=AllMessages
             $salesforceStreaming.initialize()
             
             $scope.message='Loading'
-            $rootScope.message='rootLoading'
 
             $scope.Sboject=Sboject
-            $scope.Sboject.init({!jsonObject})
+            $scope.Sboject.init(window.jsonObject)
             console.log($scope.Sboject)
             $scope.jsonListOfObjectDefination=jsonListOfObjectDefination
             console.log($scope.jsonListOfObjectDefination)
@@ -178,113 +265,9 @@
                 return message;
             }
         })
-        app.controller('CreateNewController',function($scope,$uibModalInstance,extractRowMetadata,relatedlist,Sboject,jsonListOfObjectDefination,remoteInsert,customexceptionMessages){
-            console.log(relatedlist)
-            var relatedProperties=[]
-            $scope.newRelatedList= JSON.parse(JSON.stringify(relatedlist))
-            console.log($scope.newSobject)
-            $scope.newRelatedList.data=[];
-            $scope.newRelatedList.prototype={}
-                      
-            $scope.newRelatedList.NewViewDefination.forEach(function(v) {
-                var property=v.apiName;
-                if(v.apiName.indexOf('__r.')>-1){
-                    property=v.apiName.substring(0,v.apiName.indexOf('__r.'))+'__r'
-                    relatedProperties.push(property)
-                }
-                v.apiName=property;
-                $scope.newRelatedList.prototype[property]=undefined;
-                
-                
-            })
-            jsonListOfObjectDefination[Sboject.Key].ChildRelationship.forEach(function(v){
-                if($scope.newRelatedList.Key==v.childSObject)
-                    $scope.newRelatedList.prototype[v.field.replace('__c','__r')]={Id:Sboject.data[0].Id,Name: Sboject.data[0].Name}                   
-            })  
-            $scope.newRelatedList.prototype['sobjectType']=$scope.newRelatedList.Key
-            $scope.newRelatedList.data.push(angular.copy($scope.newRelatedList.prototype))
-            $scope.addMoreNew=function(){
-                $scope.newRelatedList.data.push(angular.copy($scope.newRelatedList.prototype))
-            }
-            $scope.removeNew=function(index){
-                $scope.newRelatedList.data.slice(index,1)
-            }
-            $scope.extractRowMetadata=extractRowMetadata
-            
-            $scope.save = function () {
-                
-                $scope.newRelatedList.data.forEach(function(v1){
-                    relatedProperties.forEach(function(v){
-                        if(v1[v])
-                        v1[v.substring(0,v.indexOf('__r'))+'__c']=v1[v].Id
-                        delete v1[v]
-                    })
-                })
-                $scope.servering=true
-                var originaltoJSON=Date.prototype.toJSON 
-                Date.prototype.toJSON = function(){ return this.getTime() }
-                var data=angular.fromJson(angular.toJson($scope.newRelatedList.data))
-                Date.prototype.toJSON=originaltoJSON
-                $scope.saveMessages={} 
-                remoteInsert(data).then(function(result){
-                        
-                        delete relatedlist.creatingNew
-                        if(result.data.length==0){
-                            //delete relatedlist.creatingNew
-                            $scope.saveMessages['save']={
-                             show:true,
-                             removable:true,
-                             styleClass:'error-message',
-                             content:customexceptionMessages(result.message)
-                            }
-                        }else{
-                            relatedlist.fetchQuery()
-                            Sboject.reload();
-                            
-                            $uibModalInstance.close(result);
-                        }
-                        $scope.servering=false
-                    },function(error){
-                        console.log(error);
-                        $scope.servering=false
-                        delete relatedlist.creatingNew
-                        alert("something went wrong try again")
-                    })
-                //
-            };
-            
-            $scope.cancel = function () {
-                $uibModalInstance.dismiss('cancel');
-            };
-        })
         
-        app.factory('createNew',function($uibModal,$document){
-        	return function(relatedlist,parent) {
-                            
-                var modalInstance = $uibModal.open({
-                    animation: true,
-                    ariaLabelledBy: 'modal-title',
-                    ariaDescribedBy: 'modal-body',
-                    templateUrl: 'newSobjectModal.html',
-                    controller: 'CreateNewController',
-                    controllerAs: this,
-                    size:'lg',
-                    appendTo:angular.element($document[0].getElementById("controller")),
-                    resolve: {
-                        relatedlist: function () {
-                            return relatedlist;
-                        }
-                    }
-                });
-                
-                modalInstance.result.then(function (data) {
-                    
-                }, function () {
-                    
-                });
-                    
-           }
-        })
+        
+        
         app.factory('dataOperation',function(remoteSave,remoteDelete,reloadFactory,customexceptionMessages,AllMessages){
             return {
                 		save:function(value,Id,scope,reloadlist){
@@ -303,6 +286,69 @@
                                         return value;
                                     }))
                                     if(value.updatedValues&&!Id){
+                                        remoteSave(value.updatedValues,"type").then(function(result){
+                                            console.log(result);
+                                            if(result=="success"){
+                                                delete value.updatedValues
+                                                delete value.progress['all']
+												AllMessages.delete("pagelevel",value.Key,'New')
+												reloadFactory(reloadlist)
+                                            }else{
+												AllMessages.add({
+                                                 show:true,
+                                                 removable:true,
+                                                 styleClass:'error-message',
+                                                 content:customexceptionMessages(result)
+                                                },'pagelevel',value.Key,'New')
+											
+											}
+                                            
+                                            scope.operation=false
+                                        })
+                                        if(!value.progress)
+                                            value.progress={}
+                                        value.progress['all']=true
+                                                    
+                                    }
+                                    else if(value.updatedValues&&Id){
+                                        var data={}
+                                        data[Id]=value.updatedValues[Id]
+                                        remoteSave(data,"type").then(function(result){
+                                            console.log(result);
+                                            if(result=="success"){
+                                                delete value.updatedValues[Id]
+                                                AllMessages.delete("pagelevel",Id)//value.Key,Id)
+                                                reloadFactory(reloadlist)
+                                            }else{
+                                                AllMessages.add({
+                                                 show:true,
+                                                 removable:true,
+                                                 styleClass:'error-message',
+                                                 content:customexceptionMessages(result)
+                                                },'pagelevel',Id)//value.Key,Id)
+                                                
+                                            }
+                                            delete value.progress[Id]
+                                            
+                                            scope.operation=false
+                                        })
+                                        if(!value.progress)
+                                            value.progress={}
+                                        value.progress[Id]=true
+                                    }
+                        },
+                		saveAll:function(value,scope,reloadlist){
+                                    scope.operation="Saving all..."
+                                    value.updatedValues=angular.fromJson(JSON.stringify( value.updatedValues, function( key, value ) {
+                                        if( key === "$$hashKey" ) {
+                                            return undefined;
+                                        }
+                                        if (this[key] instanceof Date) {
+                                           return this[key].getTime();
+                                        }
+                                        return value;
+                                    }))
+                                    /*if(value.updatedValues&&!Id){
                                         remoteSave(value.updatedValues,"type").then(function(result){
                                             console.log(result);
                                             if(result=="success"){
@@ -327,13 +373,13 @@
                                         value.progress['all']=true
                                                     
                                     }
-                                    else if(value.updatedValues&&Id){
+                                    else*/ if(value.updatedValues){
                                         var data={}
-                                        data[Id]=value.updatedValues[Id]
+                                        data=JSON.parse(JSON.stringify(value.updatedValues))
                                         remoteSave(data,"type").then(function(result){
                                             console.log(result);
                                             if(result=="success"){
-                                                delete value.updatedValues[Id]
+                                                delete value.updatedValues
                                                 AllMessages.delete("blocklevel",value.Key,Id)
                                                 reloadFactory(reloadlist)
                                             }else{
@@ -351,7 +397,11 @@
                                         })
                                         if(!value.progress)
                                             value.progress={}
-                                        value.progress[Id]=true
+                                        for (Id in value.updatedValues) {
+                                            if ( value.updatedValues.hasOwnProperty(Id) )
+                                                value.progress[Id]=true
+                                        }
+                                        
                                     }
                         },
                 		delete:function(value,Id,scope,reloadlist){
@@ -366,14 +416,14 @@
                                                 scope.operation=""
                                                 reloadFactory(reloadlist)
                                                 delete value.progress[Id]
-                                                AllMessages.delete("blocklevel",value.Key,Id)
+                                                AllMessages.delete("pagelevel",Id)//value.Key,Id)
                                             }else{
                                                AllMessages.add({
                                                  show:true,
                                                  removable:true,
                                                  styleClass:'error-message',
                                                  content:customexceptionMessages(result)
-                                                },'blocklevel',value.Key,Id)
+                                                },"pagelevel",Id)//value.Key,Id)
                                                 scope.operation=""
                                                 delete value.progress[Id]
                                             }
@@ -393,11 +443,11 @@
                 }
             }
         })
-        app.factory('remoteSave', ['$q', '$rootScope', function($q, $rootScope) {
+        app.factory('remoteSave', ['$q', '$rootScope', function($q, $rootScope,VisualforceRemotingManager) {
             return function(data,type) {
                 var deferred = $q.defer();
                 Visualforce.remoting.Manager.invokeAction(
-                    '{!$RemoteAction.StandardAngularController.save}',
+                    'StandardAngularController.save',
                     data,
                     function(result, event) {
                         $rootScope.$apply(function() {
@@ -417,7 +467,7 @@
             return function(data) {
                 var deferred = $q.defer();
                 Visualforce.remoting.Manager.invokeAction(
-                    '{!$RemoteAction.StandardAngularController.insertData}',
+                    'StandardAngularController.insertData',
                     data,
                     function(result, event) {
                         $rootScope.$apply(function() {
@@ -437,7 +487,7 @@
             return function(data) {
                 var deferred = $q.defer();
                 Visualforce.remoting.Manager.invokeAction(
-                    '{!$RemoteAction.StandardAngularController.deleteData}',
+                    'StandardAngularController.deleteData',
                     data,
                     function(result, event) {
                         $rootScope.$apply(function() {
@@ -492,6 +542,14 @@
             }
           };
         })
+        app.filter('groupBy', function($parse) {
+            return _.memoize(function(items, field) {
+                var getter = $parse(field);
+                return _.groupBy(items, function(item) {
+                    return getter(item);
+                });
+            });
+        });
         app.directive('ngClickNodigest', function ($parse) {
             return {
                 compile : function ($element, attr) {
@@ -625,17 +683,27 @@
             }
             };    
         });
-        app.controller("Default_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("Default_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,AllMessages,customexceptionMessages){
                   
         })
-        app.controller("RelatedList_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("RelatedList_BlockController",function($scope,$filter,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,AllMessages,customexceptionMessages){
                   $scope.extractRowMetadata=extractRowMetadata
                   $scope.value.pageSize=10;$scope.value.currentPage=1
+                  $scope.$watch(function(){
+                     return $scope.value.data 
+                  },function(newval,oldval){
+                     $scope.filterdata()         
+                  })
+                  $scope.filterdata = function (filtervalue) {
+                    var filtered = $filter('filter')($scope.value.data, filtervalue);
+                    //filtered = $filter('orderBy')(filtered, 'name');
+                    $scope.value.filtereddata = filtered;
+                  };
         })
-        app.controller("Object_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("Object_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,AllMessages,customexceptionMessages){
                   $scope.extractRowMetadata=extractRowMetadata
         })
-		app.controller("Message_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+		app.controller("Message_BlockController",function($scope,$parse,$uibModal,$document,$rootScope,extractRowMetadata,Sboject,AllMessages,customexceptionMessages){
                   
         })
          
@@ -696,25 +764,190 @@
             }
             };    
         });
-        app.controller("Default_ButtonController",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("Default_ButtonController",function($scope){
                   $scope.action=function(){
                   	console.log('button clicked')
                     
                   }
         })
-        app.controller("New_ButtonController",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,createNew,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("New_ButtonController",function($scope,$uibModal,$document,SbojectConstruction,Sboject,remoteInsert,reloadFactory,extractRowMetadata ,AllMessages,customexceptionMessages){
+            	  
+                  var $uibModalInstance
+                  $scope.AllMessages=AllMessages
                   $scope.action=function(){
-                    console.time('createNew')
-                  	console.log('new button clicked')
-                    createNew($scope.data)
-                    console.timeEnd('createNew')
+                        console.time('createNew')
+                        console.log('new button clicked')
+                        $scope.uibModalInstance=$uibModal.open({
+                            animation: true,
+                            templateUrl: 'newSobjectModal.html',
+                            size:'lg',
+                            scope:$scope,
+                            backdrop :'static',
+                            appendTo:angular.element($document[0].getElementById("controller"))
+                        })
+                        $scope.uibModalInstance.result.then(function (data) {
+                            
+                        }, function () {
+                                    
+                        });
+                      	
+                    
                   }
+                  var relatedProperties=[]
+                  $scope.newRelatedList= SbojectConstruction.getSbojectWrapperNew($scope.data.NewViewDefination)
+                  console.log($scope.newSobject)
+                  $scope.newRelatedList.data=[];
+            	  $scope.newRelatedList.prototype={}
+            
+                  $scope.newRelatedList.displayFields.forEach(function(v) {
+                      var property=v.apiName;
+                      if(v.apiName.indexOf('__r.')>-1){
+                          property=v.apiName.substring(0,v.apiName.indexOf('__r.'))+'__r'
+                          relatedProperties.push(property)
+                      }
+                      v.apiName=property;
+                      $scope.newRelatedList.prototype[property]=undefined;
+                      
+                      
+                  })
+                  jsonListOfObjectDefination[Sboject.Key].ChildRelationship.forEach(function(v){
+                      if($scope.newRelatedList.Key==v.childSObject)
+                          $scope.newRelatedList.prototype[v.field.replace('__c','__r')]={Id:Sboject.data[0].Id,Name: Sboject.data[0].Name}                   
+                  })  
+            	  $scope.newRelatedList.prototype['sobjectType']=$scope.newRelatedList.Key
+                  var row=angular.copy($scope.newRelatedList.prototype)
+                  row.Id=$scope.newRelatedList.data.length
+            	  $scope.newRelatedList.data.push(row)
+                  $scope.addMoreNew=function(){
+                     row=angular.copy($scope.newRelatedList.prototype)
+                     if(!$scope.newRelatedList.data)
+                         $scope.newRelatedList.data=[]
+                         
+                  	 row.Id=$scope.newRelatedList.data.length
+                     $scope.newRelatedList.data.push(row)
+                  }
+                  $scope.removeNew=function(index){
+                      $scope.newRelatedList.data.slice(index,1)
+                  }
+            
+                  $scope.save = function () {
+                      var tosave=[]
+                      $scope.newRelatedList.data.forEach(function(v1,k){
+                          var v=angular.copy(v1)
+                          if($scope.newRelatedList.updatedValues[k])
+                          for (var prop in $scope.newRelatedList.updatedValues[k]) {
+                              if ($scope.newRelatedList.updatedValues[k].hasOwnProperty(prop)) {
+                                  
+                                  v[prop] = $scope.newRelatedList.updatedValues[k][prop];  
+                                      
+                              }
+                          }
+                          for (var prop in v){
+                          		  var md=extractRowMetadata($scope.newRelatedList.Key,prop)
+                                  if(md&&md.relationshipName){
+                                    if($scope.newRelatedList.updatedValues[k])
+                                  	v[md.name] = $scope.newRelatedList.updatedValues[k][prop]
+                                    
+                                    if(v[prop]&&!v[md.name])
+                                    	v[md.name] =v[prop].Id;
+                                    delete v[md.relationshipName]
+                                  }
+                      	  }
+						  delete v.Id
+                          tosave.push(v)
+                      })
+                      tosave=angular.fromJson(JSON.stringify( tosave, function( key, value ) {
+                                        if( key === "$$hashKey" ) {
+                                            return undefined;
+                                        }
+                                        if (this[key] instanceof Date) {
+                                           return this[key].getTime();
+                                        }
+                                        return value;
+                                    }))
+                      $scope.servering=true
+                      remoteInsert(tosave).then(function(result){
+                          
+                          
+                          if(result.data.length==0){
+                              
+                              //delete relatedlist.creatingNew
+                              AllMessages.add({
+                                                 show:true,
+                                                 removable:true,
+                                                 styleClass:'error-message',
+                                                 content:customexceptionMessages(result.message)
+                                                },'blocklevel',$scope.newRelatedList.Key+'New')
+                          }else{
+                              AllMessages.delete("blocklevel",$scope.newRelatedList.Key+'New')
+                              reloadFactory([Sboject,$scope.data])
+                              delete $scope.newRelatedList.data
+                              delete $scope.newRelatedList.updatedValues
+                              $scope.addMoreNew()
+                              $scope.uibModalInstance.close(result);
+                          }
+                          $scope.servering=false
+                      },function(error){
+                          console.log(error);
+                          $scope.servering=false
+                          alert("something went wrong  try again")
+                      })
+                      //
+                  };
+            	  $scope.cancel = function () {
+                            $scope.uibModalInstance.dismiss('cancel');
+                  };
+            
+                  
         })
-        app.controller("Save_ButtonController",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,dataOperation,AllMessages,customexceptionMessages){
+        app.controller("Save_ButtonController",function($scope,Sboject,dataOperation,AllMessages,customexceptionMessages){
                   $scope.action=function(){
                   	console.log('save button clicked',$scope)
                     dataOperation.save($scope.data,$scope.data.data[0].Id,$scope,[Sboject])
                   }
+        })
+        
+        app.directive("fieldLabel", function($compile,$templateCache){
+            return {
+                scope: {
+                    labelname: '<',
+                    fieldtype:'<',
+                    currentobject:'<',
+                    ctrl:"=?"
+                },
+                transclude: true,
+                replace:true,
+                controller:['$controller', '$scope','ControllerChecker', function($controller, $scope,ControllerChecker) {
+                  if(ControllerChecker.exists($scope.blockType+'_fieldLabelController')){
+                  	  $scope.ctrl=$scope.blockType+'_fieldLabelController'
+                  }else{
+                      $scope.ctrl='Default_fieldLabelController'
+                  }
+                  var ctrl= $controller($scope.ctrl, {$scope: $scope});
+                  return ctrl;
+                }],
+                link:{
+                    pre: function( scope, element, attrs ) {
+                    },
+                	post :function(scope, element, attrs,ctrl){
+                          scope.getContentUrl = function() {
+                              var templateName=scope.blockType.toLowerCase()+'_fieldLabel.html'
+                              if(document.querySelector('script[type="text/ng-template"][id="'+templateName+'"]'))
+                                  return templateName
+                              return "Default_fieldLabel.html"
+                   		  }
+                          var linkFn = $compile(scope.labelname);//$templateCache.get(scope.getContentUrl())
+                          var content = linkFn(scope);
+                          element.append(content);
+                          scope.fieldLabel={
+                              
+                          }
+                }
+            }
+            };    
+        });
+        app.controller("Default_fieldLabelController",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,AllMessages,customexceptionMessages){
+                  
         })
         
         app.directive("field", function($controller,$compile,$parse,$uibModal,$document,$rootScope,$templateCache,Sboject,ControllerChecker,extractRowMetadata){
@@ -775,41 +1008,55 @@
                           var linkFn = $compile($templateCache.get(scope.getContentUrl()));
                           var content = linkFn(scope);
                           element.append(content);
+                          if(scope.a)
                           scope.field={
                               key:scope.a,
                               value:scope.b,
                               actual:scope.b
                           }
+                          
                    		  scope.rowMetadata=extractRowMetadata(scope.metadataKey,scope.metadataApiName)
                           function update(){ 
                                
                               if(scope.fieldType=="LOOKUP"){
-                                scope.field.value = $parse(scope.a.substring(0,scope.a.indexOf('r.')+1))(scope.$parent) 
-                                if(scope.a.slice( -3 )=="__r")
-                                    scope.field.value = $parse(scope.a)(scope.$parent)
+                                scope.field.value = $parse(scope.field.key.substring(0,scope.field.key.indexOf('r.')+1))(scope.$parent) 
+                                if(scope.field.key.slice( -3 )=="__r")
+                                    scope.field.value = $parse(scope.field.key)(scope.$parent)
+                                    scope.field.actual=scope.field.value;
                               }else if(scope.fieldType=="DATE"){
-                                scope.field.value = new Date($parse(scope.a)(scope.$parent))    
+                                scope.field.value = new Date($parse(scope.field.key)(scope.$parent))
+                                scope.field.actual=scope.field.value;
+                                if(scope.currentobject&&scope.currentobject.updatedValues&&scope.rowData&&
+                                   scope.currentobject.updatedValues[scope.rowData.Id]&&
+                                   scope.currentobject.updatedValues[scope.rowData.Id][scope.field.key.replace(scope.parentref,'')]){ 
+                                          scope.field.value=scope.currentobject.updatedValues[scope.rowData.Id][scope.field.key.replace(scope.parentref,'')]
+                                   		  scope.field.updated=true
+                                }
                               }else{
-                                scope.field.value = $parse(scope.a)(scope.$parent)
+                                scope.field.value = $parse(scope.field.key)(scope.$parent)
+                                scope.field.actual=scope.field.value;
+                                if(scope.currentobject&&scope.currentobject.updatedValues&&scope.rowData&&
+                                   scope.currentobject.updatedValues[scope.rowData.Id]&&
+                                   scope.currentobject.updatedValues[scope.rowData.Id][scope.field.key.replace(scope.parentref,'')]){ 
+                                          scope.field.value=scope.currentobject.updatedValues[scope.rowData.Id][scope.field.key.replace(scope.parentref,'')]
+                                   		  scope.field.updated=true
+                                }
                               }
-                              scope.field.actual=scope.field.value;
+                              
                           }
-                  
+                  		  update()
                   		  if(scope.currentobject){
                                if(!scope.currentobject.updatedValues) {
                                     scope.currentobject.updatedValues={}
                                }  
                           }
-                          update()
-						  $rootScope.$on("update",update);
-                  		  scope.$watch(
-                              function(){return $parse(scope.a)(scope.$parent);},
+						  scope.$watch(
+                              function(){return $parse(scope.field.key)(scope.$parent);},
                               function(newvalue,oldvalue){
-								update()
-                                    
+									update()
+                                    //console.log(newvalue,oldvalue)
                               }, true
                           )
-                          $rootScope.$on("update",update);
                   		  scope.$watch(
                               function(){return scope.field;},
                               function(newvalue,oldvalue){
@@ -821,50 +1068,58 @@
                               }, true
                           )	
                   		  scope.update= function(b) {
-                      		  
-                              if(scope.a.indexOf('__r.')>-1){
-                                $parse(scope.a.substring(0,scope.a.indexOf('r.'))).assign(scope.$parent.$parent,scope.field.value)
-                                if(scope.a.slice( -3 )=="__r")
-                                    scope.b = $parse(scope.a).assign(scope.$parent.$parent,scope.field.value) 
+                      		  if(!scope.rowMetadata)
+                                  scope.rowMetadata=extractRowMetadata(scope.metadataKey,scope.metadataApiName)
+                              if(scope.field.key.indexOf('__r.')>-1){
+                                //$parse(scope.a.substring(0,scope.a.indexOf('r.'))).assign(scope.$parent.$parent,scope.field.value)
+                                //if(scope.a.slice( -3 )=="__r")
+                                   // scope.b = $parse(scope.a).assign(scope.$parent.$parent,scope.field.value) 
                               }else{
-                                $parse(scope.a).assign(scope.$parent.$parent, scope.field.value)
+                                //$parse(scope.a).assign(scope.$parent.$parent, scope.field.value)
                               }
                       
                               if(scope.currentobject){
-                                     
-                                  if(!scope.currentobject.updatedValues[scope.rowData.Id]){
+                                  var data={}  
+                                  if(scope.rowData&&!scope.currentobject.updatedValues[scope.rowData.Id]){
                                       var data={}
                                       data['Id']=scope.rowData.Id
                                       
                                       if(scope.fieldType=="LOOKUP"){
-                                          data[(scope.a.substring(0,scope.a.indexOf('__r.'))+'__c').replace(scope.parentref,'')]=scope.field.value?scope.field.value.Id:null
+                                          //data[(scope.field.key.substring(0,scope.field.key.indexOf('__r.'))+'__c').replace(scope.parentref,'')]=scope.field.value?scope.field.value.Id:null
+                                      	  data[scope.rowMetadata.name]=scope.field.value?scope.field.value.Id:null
                                       }
                                       if(scope.fieldType=="operationselect"){
                                           
                                       }
                                       if(!(scope.fieldType=="operationselect"||scope.fieldType=="LOOKUP")){
-                                          data[scope.a.replace(scope.parentref,'')]=eval('scope.rowData.'+scope.a.replace(scope.parentref,''))
+                                          //data[scope.field.key.replace(scope.parentref,'')]=scope.field.value//eval('scope.rowData.'+scope.a.replace(scope.parentref,''))
+                                      	  data[scope.rowMetadata.name]=scope.field.value
                                       }
                                       scope.currentobject.updatedValues[scope.rowData.Id]=data
-                                      
-                                  }else{
+									  scope.field.updated=true                                      
+                                  }else if(scope.rowData&&scope.currentobject.updatedValues[scope.rowData.Id]){
                                       if(scope.fieldType=="LOOKUP"){
-                                          scope.currentobject.updatedValues[scope.rowData.Id][(scope.a.substring(0,scope.a.indexOf('__r.'))+'__c').replace(scope.parentref,'')]=scope.field.value?scope.field.value.Id:null
+                                          //scope.currentobject.updatedValues[scope.rowData.Id][(scope.field.key.substring(0,scope.field.key.indexOf('__r.'))+'__c').replace(scope.parentref,'')]=scope.field.value?scope.field.value.Id:null
+                                      	  scope.currentobject.updatedValues[scope.rowData.Id][scope.rowMetadata.name]=scope.field.value?scope.field.value.Id:null
                                       }
                                       if(scope.fieldType=="operationselect"){
                                           
                                       }
                                       if(!(scope.fieldType=="operationselect"||scope.fieldType=="LOOKUP")){ 
-                                          scope.currentobject.updatedValues[scope.rowData.Id][scope.a.replace(scope.parentref,'')]=eval('scope.rowData.'+scope.a.replace(scope.parentref,''))
-                                      }  
+                                          //scope.currentobject.updatedValues[scope.rowData.Id][scope.field.key.replace(scope.parentref,'')]=scope.field.value//eval('scope.rowData.'+scope.a.replace(scope.parentref,''))
+                                      	  scope.currentobject.updatedValues[scope.rowData.Id][scope.rowMetadata.name]=scope.field.value
+                                      }
+                                      scope.field.updated=true
                                   }
                               }
-                          if(scope.currentobject&&scope.field.actual==scope.field.value){
+                          if(scope.rowData&&scope.currentobject&&(scope.field.actual==scope.field.value
+                                                   ||(scope.field.actual  instanceof Date && scope.field.actual.getTime()===scope.field.value.getTime()))){
+                              delete scope.field.updated
                               
                               if(Object.keys(scope.currentobject.updatedValues[scope.rowData.Id]).length<=2)
                                   delete scope.currentobject.updatedValues[scope.rowData.Id]
                               else
-                                  delete scope.currentobject.updatedValues[scope.rowData.Id][scope.a.replace('rsobject.','')]
+                                  delete scope.currentobject.updatedValues[scope.rowData.Id][scope.rowMetadata.name]//delete scope.currentobject.updatedValues[scope.rowData.Id][scope.a.replace(scope.parentref,'')]
                           }
                   };
                    
@@ -901,9 +1156,9 @@
                   
                   
         })
-        
-        app.controller("LOOKUP",function($scope,$parse,$uibModal,$document,$rootScope,$salesforceApiForVf,Sboject,extractRowMetadata,AllMessages,customexceptionMessages){
+        app.controller("LOOKUP",function($scope,$parse,$uibModal,$document,$salesforceApiForVf,Sboject,SbojectConstruction,extractRowMetadata,AllMessages,customexceptionMessages){
                    var scope=$scope
+                   var $uibModalInstance;
                    scope.$watch(function(){return scope.rowMetadata},function(){
                        if(!scope.rowParent.lookupViewDefination||(scope.rowParent.lookupViewDefination&&scope.rowMetadata&&!scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]])){
                            $salesforceApiForVf.getSearchLayout($salesforceApiForVf.org,scope.rowMetadata['referenceTo'][0]).then(
@@ -915,10 +1170,7 @@
                                     SObjectSearchMap.name=scope.rowMetadata['referenceTo'][0].split('_').join(' ');
                                     SObjectSearchMap.Fields=[];
                                     SObjectSearchMap.Filter=[];
-                                    SObjectSearchMap.displayColums=[];
-                                    SObjectSearchMap.NewViewDefination=[];
-                                    SObjectSearchMap.lookupViewDefination={};
-                                    SObjectSearchMap.data=[]; 
+                                    SObjectSearchMap.displayColums=[]; 
                                     response.data[0].searchColumns.forEach(function(value){
                                         SObjectSearchMap.Fields.push(value.name)
                                         if(value.name.indexOf("toLabel(")==0)
@@ -937,40 +1189,39 @@
                                     }
                                     SObjectSearchMap.recentQuery='SELECT '+SObjectSearchMap.Fields.join(',')+' RecentlyViewed WHERE Type IN (\''+SObjectSearchMap.key+'\') ORDER BY LastViewedDate DESC ';
                                     SObjectSearchMap.query='FIELDS RETURNING '+SObjectSearchMap.Key+' (Id,'+SObjectSearchMap.Fields.join(',')+')';
-                                    scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]]=SObjectSearchMap
+                                    
+                                    scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]]=SbojectConstruction.getSbojectWrapperNew(SObjectSearchMap)
+                                    scope.relatedSobject=scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]]
+                                    scope.relatedSobject.data=[]
+                                    scope.filterName=scope.relatedSobject.displayColums[0].apiName
                                 }
                            )
                        }
-                       scope.lookupRemove=function(){
+                       else if(scope.rowParent.lookupViewDefination&&scope.rowMetadata&&scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]]){
+                           scope.relatedSobject=scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]]
+                           scope.relatedSobject.data=[]
+                           scope.filterName=scope.relatedSobject.displayColums[0].apiName
+                       }
+                       
+                   })
+                   scope.lookupRemove=function(){
                             scope.field.value=null;
                            //scope.update();
-                       }
-                   })
+                   }
+                   if(!scope.rowMetadata)
+                   	scope.rowMetadata=extractRowMetadata(scope.metadataKey,scope.metadataApiName)
+                   
                    scope.lookup=function(searchValue,size) {
                             console.log(scope.rowMetadata);console.log(scope.rowData);console.log(scope.rowParent);
-                            var modalInstance = $uibModal.open({
+                            $uibModalInstance= $uibModal.open({
                               animation: true,
-                              ariaLabelledBy: 'modal-title',
-                              ariaDescribedBy: 'modal-body',
                               templateUrl: 'lookupModal.html',
-                              controller: 'ModalInstanceCtrl',
-                              controllerAs: 'this',
                               size: size,
-                              appendTo:angular.element($document[0].getElementById("controller")),
-                              resolve: {
-                                row: function () {
-                                  if(!scope.rowMetadata)
-                                      scope.rowMetadata=extractRowMetadata(scope.metadataKey,scope.metadataApiName)
-                                  return {
-                                    Definition:scope.rowParent.lookupViewDefination[scope.rowMetadata['referenceTo'][0]],
-                                    data:scope.rowData,
-                                    searchValue:searchValue
-                                  };
-                                }
-                              }
+                              scope:scope,
+                              appendTo:angular.element($document[0].getElementById("controller"))
                             });
                         
-                            modalInstance.result.then(function (selectedItem) {
+                            $uibModalInstance.result.then(function (selectedItem) {
                                     scope.field.value=selectedItem
                                 
                                     //scope.update(scope.b)
@@ -980,9 +1231,38 @@
                             });
                     
                    }
+                   
+                   scope.search=function(filterValue){
+                        scope.message="Loading.."
+                        scope.servering=true
+                        $salesforceApiForVf.search($salesforceApiForVf.org, scope.relatedSobject.searchQuery.replace( /({)(.*?)(})/, "{"+filterValue+"}" )).then(
+                              function(data){
+                                  scope.relatedSobject.data=data.data.searchRecords
+                                  scope.servering=false
+                              },function(error){
+                                    scope.message="No results found"
+                                    scope.servering=false
+                              }
+                        )
+                   }
+                   
+                   if(scope.filterValue=='' || scope.filterValue==undefined ||( scope.filterValue && scope.filterValue.length < 3) ){
+                       $scope.message="Please enter search term having more than three characters"
+                   }
+                   scope.select=function(item,event){
+                       $uibModalInstance.close({Id:item.Id,Name:item.Name});
+                   }
+              
+                   scope.ok = function () {
+                        $uibModalInstance.close($ctrl.selected.item);
+                   };
+            
+              	   scope.cancel = function () {
+                    	$uibModalInstance.dismiss('cancel');
+              	   };
                                       
         })
-        app.controller("BOOLEAN",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("BOOLEAN",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,AllMessages,customexceptionMessages){
                    var scope=$scope
                    scope.toggleBoolean=function(){
                        //scope.b=scope.b?false:true
@@ -990,11 +1270,11 @@
                    }
                                    
         })
-        app.controller("OPERATIONSELECT",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("OPERATIONSELECT",function($scope,$parse,$uibModal,$document,$rootScope,Sboject,AllMessages,customexceptionMessages){
                    $scope.field.actual=false
                                    
         })
-        app.controller("OPERATIONEDIT",function($scope,$parse,$uibModal,$document,$rootScope,dataOperation,Sboject,FinalizeProductRemote,UnFinalizeProductRemote,AllMessages,customexceptionMessages){
+        app.controller("OPERATIONEDIT",function($scope,$parse,$uibModal,$document,$rootScope,dataOperation,Sboject,AllMessages,customexceptionMessages){
                    $scope.save=function(reladedlist,id){
                        console.log(reladedlist,id)
                        dataOperation.save(reladedlist,id,$scope,[reladedlist,Sboject])
@@ -1041,52 +1321,7 @@
           $salesforceApiForVf.org['access_token']=SESSION_ID
           $salesforceApiForVf.org['instance_url']='https://'+window.location.hostname+PRM_PREFIX||'';
         })  
-        app.controller('ModalInstanceCtrl', function ($scope,$uibModalInstance,$salesforceApiForVf,row,extractRowMetadata) {
-              var $ctrl = this;
-              $scope.extractRowMetadata=extractRowMetadata
-            //$scope.filterValue=row.searchValue.Name
-              $scope.relatedSobject=row.Definition
-              $scope.relatedSobject.data=[]
-              $scope.filterName=$scope.relatedSobject.displayColums[0].apiName
-              $scope.search=function(query){
-                    $scope.message="Loading.."
-                    $scope.servering=true
-                    $salesforceApiForVf.search($salesforceApiForVf.org,query).then(
-                          function(data){
-                              $scope.relatedSobject.data=data.data.searchRecords
-                              $scope.servering=false
-                          },function(error){
-                                $scope.message="No results found"
-                                $scope.servering=false
-                          }
-                     )
-              }
-              
-              //$scope.search($scope.relatedSobject.recentQuery)
-              //$scope.search('Find {' +$scope.filterValue+'} In '+$scope.filterName+' '+$scope.relatedSobject.query +'  LIMIT 100')
-                
-              $scope.modifyQuery=function(){
-                console.log($scope.filterName,$scope.filterValue)
-                $scope.search('Find {' +$scope.filterValue+'} In '+$scope.filterName+' '+$scope.relatedSobject.query +'  LIMIT 100')
-              }
-              if($scope.filterValue=='' || $scope.filterValue==undefined ||( $scope.filterValue && $scope.filterValue.length < 3) ){
-                    $scope.message="Please enter search term having more than three characters"
-              }else{
-                  $scope.modifyQuery()
-              }
-              $scope.select=function(item,event){
-                  
-                $uibModalInstance.close({Id:item.Id,Name:item.Name});
-              }
-              
-              $ctrl.ok = function () {
-                    $uibModalInstance.close($ctrl.selected.item);
-              };
-            
-              $scope.cancel = function () {
-                    $uibModalInstance.dismiss('cancel');
-              };
-        });
+        
         app.filter('percentage', ['$filter', function ($filter) {
           return function (input, decimals) {
             return $filter('number')(input * 100, decimals) + '%';
@@ -1453,27 +1688,20 @@
         	return worker;
         
         })
-        app.factory('Remotefunction',function($q, $rootScope){
-             return function(RemotefunctionFullName,data) {
+        app.factory('VisualforceRemotingManager',function($q, $rootScope){
+            function dispatch(fn, args) {
+                fn = (typeof fn == "function") ? fn : window[fn];  // Allow fn to be a function object or the name of a global function
+                return fn.apply(this, args || []);  // args is optional, use an empty array by default
+            }
+ 
+            return function(argumentArray) {
+                
                 var deferred = $q.defer();
-                Visualforce.remoting.Manager.invokeAction(
-                    RemotefunctionFullName,
-                    data,
-                    function(result, event) {
-                        $rootScope.$apply(function() {
-                            if (event.status) {
-                                deferred.resolve(JSON.parse(result));
-                            } else {
-                                deferred.reject(event);
-                            }
-                        })
-                    },
-                    { buffer: true, escape: false, timeout:  120000 }
-                );
+                dispatch(Visualforce.remoting.Manager.invokeAction,argumentArray)
                 return deferred.promise;
             }
         })
-             
+        
         app.directive("fixedHead", function($compile){
             var scrollLeft = 0;
             function combine(elements){
@@ -1493,7 +1721,7 @@
                 scope: {
                 },
                 link: function(scope, element, attrs, ngModel){
-                    
+                    scope.firstheaderwidth=[]
                     combine(element.children('.'+attrs.combineHorizontalScrolls));
                     scope.$watch(
                         function () {
@@ -1513,7 +1741,6 @@
                             }
                        },
                        function (newval,oldval) {
-                            
                             element[0].querySelectorAll('[th-type="fixed"]').forEach(function(v,k){
                                 v.querySelector('div').style.width=newval.originaHeaderwidth[k]+"px"
                             })
@@ -1523,7 +1750,20 @@
                 }
             };
         });
-        app.directive('loader', function () {
+		app.directive('ngEnter', function () {
+            return function (scope, element, attrs) {
+                element.bind("keydown keypress", function (event) {
+                    if(event.which === 13) {
+                        scope.$apply(function (){
+                            scope.$eval(attrs.ngEnter);
+                        });
+         
+                        event.preventDefault();
+                    }
+                });
+            };
+        });
+		app.directive('loader', function () {
             return {
                 
                 templateUrl: 'SVGloader2.html'
@@ -1536,14 +1776,17 @@
                 restrict: 'A',
                 link: function (scope, element, attrs) {
                     var topClass = attrs.setClassWhenAtTop, // get CSS class from directive's attribute value
-                        offsetTop = element[0].offsetTop; // get element's top relative to the document
+                        offsetTop = element[0].offsetTop//element[0].getBoundingClientRect().top;//element[0].offsetTop; // get element's top relative to the document
                     if($win[0].pageYOffset >= offsetTop) {
                             element.addClass(topClass);
+                           element.removeClass(attrs.relativeclass);
                     }
                     $win.on('scroll', function (e) {
                         if ($win[0].pageYOffset >= offsetTop) {
                             element.addClass(topClass);
+                            element.removeClass(attrs.relativeclass);
                         } else {
+                            element.addClass(attrs.relativeclass);
                             element.removeClass(topClass);
                         }
                     });
@@ -1579,4 +1822,18 @@
                        }
                    }
         })
-})();        
+        app.directive('trackDigests', function trackDigests($rootScope) {
+            function link($scope, $element, $attrs) {
+                var count = 0;
+                function countDigests(newValue, oldValue) {
+                    count++;
+                    $element[0].innerHTML = '$digests: ' + count;
+                }
+                $rootScope.$watch(countDigests);
+            }
+            return {
+                restrict: 'EA',
+                link: link
+            };
+        });
+})();
