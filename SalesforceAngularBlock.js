@@ -253,14 +253,8 @@
         });
         app.factory('customexceptionMessages',function(){
             return function(message){
-                if(message.indexOf('Billing_Terms_lookup__c')>0){
-                    return "Billing terms doesn't have contract only checked "
-                }
-                if(message.indexOf('Payment_Term_lookup__c')>0){
-                    return "Payment terms doesn't have contract only checked "
-                }
-                if(message.indexOf('Shipping_Terms_lookup__c')>0){
-                    return "Shipping  terms doesn't have contract only checked "
+                if(message.indexOf('some token')>0){
+                    return "Message related to that token "
                 }
                 return message;
             }
