@@ -6,15 +6,13 @@
     <meta name="author" content="Manoj Chouhury(502562171)"/>
     
 
-    <link href="{!URLFOR($Resource.AngularStatic, 'css/bootstrap.3.3.6.bs.min.css')}" rel="stylesheet" />
-    <link href="{!URLFOR($Resource.manage_agreement, 'angular-datatables.css')}" rel="stylesheet" />
+    <link href="{!URLFOR($Resource.AngularBlocks, 'css/bootstrap.3.3.6.bs.min.css')}" rel="stylesheet" />
     <!--View-->
     
     </head>
     <body>
-   	<c:StandardAngularTemplates ></c:StandardAngularTemplates>
-    <cChaterFeedComponent Object_Id="{!Object_Id}"></cChaterFeedComponent>
-    <div ng-app="StandardAngular" ng-cloak="" class="bs ng-cloak">
+   	<c:AngularBlocksTemplates ></c:AngularBlocksTemplates>
+    <div ng-app="AngularBlocks" ng-cloak="" class="bs ng-cloak">
        
 
         <div ng-controller="AngularBlocksController" id="controller">
@@ -36,12 +34,12 @@
     </div>
     <!--View End-->
 
-    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/jquery-3.2.1.min.js')}"></script>   
-    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular.1.5.8.min.js')}"></script>
-    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular-sanitize.1.5.8.min.js')}"></script>
-    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/ui-bootstrap-tpls-2.2.0.min.js')}"></script>
-    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular-animate.1.5.8.min.js')}"></script>
-    <script src="{!URLFOR($Resource.AngularPagination, 'dirPagination.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/jquery-3.2.1.min.js')}"></script>   
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/angular.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/angular-sanitize.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/ui-bootstrap-tpls-2.2.0.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/angular-animate.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks, 'js/dirPagination.js')}"></script>
         
     
     
@@ -57,7 +55,7 @@
         window.jsonListOfObjectDefination={!jsonListOfObjectDefination};
         window.jsonObject={!jsonObject};
         (function() { 
-            var appInitilizer=angular.module('StandardAngularInitilizer',[])
+            var appInitilizer=angular.module('AngularBlocksInitilizer',[])
             appInitilizer.constant('SESSION_ID', '{!$Api.Session_ID}')
             appInitilizer.constant('USER_PROFILE_ID', '{!$Profile.Id}')
             appInitilizer.constant('USER_PROFILE_NAME', '{!$Profile.Name}')
@@ -67,7 +65,7 @@
              
     </script>
         
-    <script src="{!URLFOR($Resource.StandardAngular)}"></script>
+    <script src="{!URLFOR($Resource.AngularBlocks)}"></script>
         
     </body>
 </apex:page>
