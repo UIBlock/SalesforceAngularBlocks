@@ -1,4 +1,4 @@
-<apex:page controller="StandardAngularController"  showheader="false" sidebar="false" standardstylesheets="false" html-extenstion="remove html and your extensions here">
+<apex:page controller="AngularBlocksController"  showheader="false" sidebar="false" standardstylesheets="false" html-extenstion="remove html and your extensions here">
     <head>
     
     <meta name="description" content="Angular page for Standard Componenets"/>
@@ -17,7 +17,7 @@
     <div ng-app="StandardAngular" ng-cloak="" class="bs ng-cloak">
        
 
-        <div ng-controller="StandardAngularController" id="controller">
+        <div ng-controller="AngularBlocksController" id="controller">
             <block block-type="'Message'"  value="AllMessages.pagelevel" parentdata="Sboject" 
                    set-class-when-at-top="error-message-fixed" relativeclass="error-message-relative" style="transition: all linear 0.16s;">
             </block>
