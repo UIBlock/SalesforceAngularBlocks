@@ -1,0 +1,73 @@
+<apex:page controller="StandardAngularController"  showheader="false" sidebar="false" standardstylesheets="false" html-extenstion="remove html and your extensions here">
+    <head>
+    
+    <meta name="description" content="Angular page for Standard Componenets"/>
+    <meta name="keywords" content="HTML,CSS,Angular,bootstrap"/>
+    <meta name="author" content="Manoj Chouhury(502562171)"/>
+    
+
+    <link href="{!URLFOR($Resource.AngularStatic, 'css/bootstrap.3.3.6.bs.min.css')}" rel="stylesheet" />
+    <link href="{!URLFOR($Resource.manage_agreement, 'angular-datatables.css')}" rel="stylesheet" />
+    <!--View-->
+    
+    </head>
+    <body>
+   	<c:StandardAngularTemplates ></c:StandardAngularTemplates>
+    <cChaterFeedComponent Object_Id="{!Object_Id}"></cChaterFeedComponent>
+    <div ng-app="StandardAngular" ng-cloak="" class="bs ng-cloak">
+       
+
+        <div ng-controller="StandardAngularController" id="controller">
+            <block block-type="'Message'"  value="AllMessages.pagelevel" parentdata="Sboject" 
+                   set-class-when-at-top="error-message-fixed" relativeclass="error-message-relative" style="transition: all linear 0.16s;">
+            </block>
+           
+            <div class="panel panel-default sObjectPanel">
+                 <block block-type="'Object'"  value="Sboject" parentdata="Sboject"></block>
+                 <block class="RelatedList" Sboject="Sboject" parentdata="Sboject"  value="value" ng-repeat="(key, value) in Sboject.RelatedListMap" block-type="'RelatedList'" ></block>
+                 
+           </div>
+           
+           
+           
+        </div>  
+            
+        
+    </div>
+    <!--View End-->
+
+    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/jquery-3.2.1.min.js')}"></script>   
+    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular-sanitize.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/ui-bootstrap-tpls-2.2.0.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularStatic, 'js/vendor/angular-animate.1.5.8.min.js')}"></script>
+    <script src="{!URLFOR($Resource.AngularPagination, 'dirPagination.js')}"></script>
+        
+    
+    
+    <script src="{!URLFOR($Resource.StreamingApi, 'Cometd.js')}"></script>
+    <script src="{!URLFOR($Resource.StreamingApi, 'json2.js')}"></script> 
+    <script src="{!URLFOR($Resource.StreamingApi, 'jquery.cometd.js')}"></script> 
+   
+    <script ssrc="!URLFOR($Resource.AngularStreamingApi, 'angular-cometd.js')}"></script>
+    <script ssrc="!URLFOR($Resource.AngularStreamingApi, 'angular-cometd-reload.js')}"></script> 
+    <script ssrc="!URLFOR($Resource.AngularStreamingApi, 'ReloadExtension.js')}"></script> 
+        
+    <script>
+        window.jsonListOfObjectDefination={!jsonListOfObjectDefination};
+        window.jsonObject={!jsonObject};
+        (function() { 
+            var appInitilizer=angular.module('StandardAngularInitilizer',[])
+            appInitilizer.constant('SESSION_ID', '{!$Api.Session_ID}')
+            appInitilizer.constant('USER_PROFILE_ID', '{!$Profile.Id}')
+            appInitilizer.constant('USER_PROFILE_NAME', '{!$Profile.Name}')
+            appInitilizer.constant('PRM_PREFIX', '{!$Site.Prefix}')
+            appInitilizer.constant('Object_ID', '{!$CurrentPage.parameters.id}')
+        })();
+             
+    </script>
+        
+    <script src="{!URLFOR($Resource.StandardAngular)}"></script>
+        
+    </body>
+</apex:page>
